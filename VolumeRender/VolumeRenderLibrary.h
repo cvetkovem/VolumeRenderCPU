@@ -90,13 +90,6 @@ private:
   uint32_t imageHeight;
   int8_t imageStatus;
 
-  uint32_t xClipMin;
-  uint32_t xClipMax;
-  uint32_t yClipMin;
-  uint32_t yClipMax;
-  uint32_t zClipMin;
-  uint32_t zClipMax;
-
   float cameraPosition[3];
   float cameraTarget[3];
   float cameraUp[3];
@@ -113,16 +106,12 @@ private:
   ANTIALIASING_VALUE antialiasingValue;
   uint32_t imageScale;
 
+  int32_t enableDrawBox;
+
   void cameraPerspective(float angle, uint32_t width, uint32_t height, float zNear, float zFar);
   void cameraTranslate(float x, float y, float z);
   void cameraRotate(float *cameraTarget, float *cameraUp);
   void calcCameraMatrixs(uint32_t width, uint32_t height);
-
-  void vecCross(float *a, float *b, float *out);
-  void vecNormalize(float *in);
-
-  void multMatrix4x4(float *lMatrix, float *rMatrix, float *out);
-  void matrix4MultVector4(float *matrix, float *vector, float *outVector);
 
   void deleteVolume();
   void deleteInterpolate();
@@ -130,6 +119,8 @@ private:
   // functions for render
   float* renderGetMVPMatrix();
   float* renderCreateBoxForVolume();
+  void renderDrawBox();
+  void brezenhem(int x0, int y0, int x1, int y1, unsigned char *rgba);
   void renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBuffer);
   int32_t renderFragmentShader(float *rayPosition, unsigned char *pixelColor);
 
@@ -172,8 +163,7 @@ public:
 /*************             
  * Rendering *
  *************/
-  // Sets the rendering clipping box
-  int setClippingBox(uint32_t xClipMin, uint32_t xClipMax, uint32_t yClipMin, uint32_t yClipMax, uint32_t zClipMin, uint32_t zClipMax);
+  void setEnableDrawBox(int32_t en);
   // Renders the scene
   int render();
 

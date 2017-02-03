@@ -6,3 +6,7 @@
 /Release
 /VolumeRender/Release
 *.opendb
+/VolumeRender/dicomMatrix.bin
+/*.vspx
+/VolumeRender/SAVE_IMG.TXT
+/.vs/VolumeRender/v14

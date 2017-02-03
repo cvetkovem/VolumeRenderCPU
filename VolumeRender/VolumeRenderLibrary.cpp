@@ -1,11 +1,7 @@
 #include "VolumeRenderLibrary.h"
-#include <math.h>
+#include "utils\VectorMath.h"
 
 #include <stdio.h>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 #define EPSILON 0.00001f
 
@@ -32,16 +28,11 @@ VRL::VRL() {
   this->image = nullptr;
   this->imageStatus = VRL_IMAGE_NULL;
 
-  this->xClipMin = 0;
-  this->xClipMax = 0;
-  this->yClipMin = 0;
-  this->yClipMax = 0;
-  this->zClipMin = 0;
-  this->zClipMax = 0;
-
   this->renderStepSize = 1.0f;
   this->antialiasingValue = VRL_ANTIALIASING_X1;
   this->imageScale = 1;
+
+  this->enableDrawBox = 0;
 }
 
 VRL::~VRL() {
@@ -376,17 +367,6 @@ unsigned char* VRL::getImage() {
   return (this->image);
 }
 
-int VRL::setClippingBox(uint32_t xClipMin, uint32_t xClipMax, uint32_t yClipMin, uint32_t yClipMax, uint32_t zClipMin, uint32_t zClipMax) {
-  this->xClipMin = xClipMin;
-  this->xClipMax = xClipMax;
-  this->yClipMin = yClipMin;
-  this->yClipMax = yClipMax;
-  this->zClipMin = zClipMin;
-  this->zClipMax = zClipMax;
-
-  return VRL_OK;
-}
-
 void VRL::calcCameraMatrixs(uint32_t width, uint32_t height) {
   cameraTranslate(this->cameraPosition[0], this->cameraPosition[1], this->cameraPosition[2]);
   cameraRotate(this->cameraTarget, this->cameraUp);
@@ -435,15 +415,15 @@ void VRL::cameraTranslate(float x, float y, float z) {
 
 void VRL::cameraRotate(float *_cameraTarget, float *_cameraUp) {
   float N[3] = { _cameraTarget[0], _cameraTarget[1], _cameraTarget[2] };
-  vecNormalize(N);
+  normalizeVec3f(N);
 
   float U[3] = { _cameraUp[0], _cameraUp[1], _cameraUp[2] };
-  vecNormalize(U);
+  normalizeVec3f(U);
 
-  vecCross(U, _cameraTarget, U);
+  crossVec3f(U, _cameraTarget, U);
   
   float V[3];
-  vecCross(N, U, V);
+  crossVec3f(N, U, V);
 
   this->cameraRotateMatrix[0]  = U[0];
   this->cameraRotateMatrix[1]  = U[1];
@@ -466,29 +446,10 @@ void VRL::cameraRotate(float *_cameraTarget, float *_cameraUp) {
   this->cameraRotateMatrix[15] = 1.0f;
 }
 
-void VRL::vecCross(float *a, float *b, float *out) {
-  float tmp[3];
-  tmp[0] = a[1] * b[2] - a[2] * b[1];
-  tmp[1] = a[2] * b[0] - a[0] * b[2];
-  tmp[2] = a[0] * b[1] - a[1] * b[0];
-
-  out[0] = tmp[0];
-  out[1] = tmp[1];
-  out[2] = tmp[2];
-}
-
-void VRL::vecNormalize(float *in) {
-  const float Length = sqrtf(in[0] * in[0] + in[1] * in[1] + in[2] * in[2]);
-
-  in[0] /= Length;
-  in[1] /= Length;
-  in[2] /= Length;
-}
-
 void VRL::cameraPerspective(float angle, uint32_t width, uint32_t height, float _zNear, float zFar) {
   const double ar = (double)(width) / (double)(height);
   const float zRange = _zNear - zFar;
-  const double tanHalfFOV = tan(((double)angle / 2.0L) * (M_PI / 180.0L));
+  const double tanHalfFOV = tan((double)ToRadian(angle / 2.0f));
 
   this->cameraPerspectiveMatrix[0]  = (float)(1.0L / (tanHalfFOV * ar));
   this->cameraPerspectiveMatrix[1]  = 0.0f;
@@ -512,7 +473,7 @@ void VRL::cameraPerspective(float angle, uint32_t width, uint32_t height, float 
 }
 
 int VRL::setRotateVolume(float angle, float *axis) {
-  double rotationAngle = (double)(angle) * (M_PI / 180.0L);
+  double rotationAngle = (double)ToRadian(angle);
   double qx = (double)(axis[0]) * sin(rotationAngle / 2.0L);
   double qy = (double)(axis[1]) * sin(rotationAngle / 2.0L);
   double qz = (double)(axis[2]) * sin(rotationAngle / 2.0L);
@@ -550,7 +511,7 @@ int VRL::addRotateVolume(float angle, float *axis) {
 
     setRotateVolume(angle, axis);
 
-    multMatrix4x4(this->volumeRotateMatrix, oldRotateVolumeMatrix, this->volumeRotateMatrix);
+    multMatrix4fx4f(this->volumeRotateMatrix, oldRotateVolumeMatrix, this->volumeRotateMatrix);
 
     return VRL_OK;
 }
@@ -606,57 +567,6 @@ int VRL::setTranslateVolume(float x, float y, float z) {
 int VRL::resetTranslateVolume() {
   int ret = setTranslateVolume(0.0f, 0.0f, 0.0f);
   return ret;
-}
-
-void VRL::multMatrix4x4(float *lMatrix, float *rMatrix, float *out) {
-  float tmp[16];
-
-  for (unsigned int i = 0; i < 4; i++) {
-    for (unsigned int j = 0; j < 4; j++) {
-      tmp[(i * 4) + j] = 
-        lMatrix[(i * 4) + 0] * rMatrix[(0 * 4) + j] +
-        lMatrix[(i * 4) + 1] * rMatrix[(1 * 4) + j] +
-        lMatrix[(i * 4) + 2] * rMatrix[(2 * 4) + j] +
-        lMatrix[(i * 4) + 3] * rMatrix[(3 * 4) + j];
-    }
-  }
-
-  out[0]  = tmp[0];
-  out[1]  = tmp[1];
-  out[2]  = tmp[2];
-  out[3]  = tmp[3];
-
-  out[4]  = tmp[4];
-  out[5]  = tmp[5];
-  out[6]  = tmp[6];
-  out[7]  = tmp[7];
-
-  out[8]  = tmp[8];
-  out[9]  = tmp[9];
-  out[10] = tmp[10];
-  out[11] = tmp[11];
-
-  out[12] = tmp[12];
-  out[13] = tmp[13];
-  out[14] = tmp[14];
-  out[15] = tmp[15];
-}
-
-void VRL::matrix4MultVector4(float *matrix, float *vector, float *outVector) {
-  float tmp[4];
-
-  for (unsigned int i = 0; i < 4; i++) {
-    tmp[i] = 
-        matrix[i * 4 + 0] * vector[0] +
-        matrix[i * 4 + 1] * vector[1] +
-        matrix[i * 4 + 2] * vector[2] +
-        matrix[i * 4 + 3] * vector[3];
-  }
-
-  outVector[0]  = tmp[0];
-  outVector[1]  = tmp[1];
-  outVector[2]  = tmp[2];
-  outVector[3]  = tmp[3];
 }
 
 int VRL::setImageQuality(VRL_IMAGE_QUALITY imgQua) {
@@ -724,19 +634,19 @@ float* VRL::renderGetMVPMatrix() {
 
   // M: model matrix
   float modelMatrix[16];
-  multMatrix4x4(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
+  multMatrix4fx4f(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
 
   // V: view matrix 
   float viewMatrix[16];
-  multMatrix4x4(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
+  multMatrix4fx4f(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
 
   // P: projection matrix
   // this->cameraPerspectiveMatrix;
 
   // MVP matrix
   float *mvpMatrix = new float[16];
-  multMatrix4x4(this->cameraPerspectiveMatrix, viewMatrix, mvpMatrix);
-  multMatrix4x4(mvpMatrix, modelMatrix, mvpMatrix);
+  multMatrix4fx4f(this->cameraPerspectiveMatrix, viewMatrix, mvpMatrix);
+  multMatrix4fx4f(mvpMatrix, modelMatrix, mvpMatrix);
 
   return mvpMatrix;
 }
@@ -949,13 +859,13 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
 
   // M: model matrix
   float modelMatrix[16];
-  multMatrix4x4(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
+  multMatrix4fx4f(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
   // V: view matrix 
   float viewMatrix[16];
-  multMatrix4x4(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
+  multMatrix4fx4f(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
 
   float MV[16];
-  multMatrix4x4(viewMatrix, modelMatrix, MV);
+  multMatrix4fx4f(viewMatrix, modelMatrix, MV);
 
   float vecPoint[4];
   float newCamera[3];
@@ -975,7 +885,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   rayDirection[1] = rayPosition[1] - newCamera[1];
   rayDirection[2] = rayPosition[2] - newCamera[2];
 
-  vecNormalize(rayDirection);
+  normalizeVec3f(rayDirection);
 
   rayDirection[0] = rayStepSize * rayDirection[0];
   rayDirection[1] = rayStepSize * rayDirection[1];
@@ -1022,7 +932,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
 
 
 // TEST START
-      if (density > 320.0f) {
+      if (density > 200.0f) {
         // Phong 
         index = (int32_t)(density - this->minDensity);
         // Ambient
@@ -1040,8 +950,8 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         currentNormal[0] = -(densityNeighbors[0] - densityNeighbors[1]);
         currentNormal[1] = -(densityNeighbors[2] - densityNeighbors[3]);
         currentNormal[2] = -(densityNeighbors[4] - densityNeighbors[5]);
-        vecNormalize(currentNormal);
-        matrix4MultVector4(modelMatrix, currentNormal, currentNormal);
+        normalizeVec3f(currentNormal);
+        matrix4fMultVec4f(modelMatrix, currentNormal, currentNormal);
         //if(dot(normalVec,ray)>0) normalVec*=-1;
         dot(currentNormal, lightDirectionMinus, &diffuseFactor);
         diffuseFactor = (diffuseFactor < 0.0f)?(0.0f):(diffuseFactor);
@@ -1106,7 +1016,7 @@ void VRL::renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBu
     inPoint[2] = pointsTriangle[i * 3 + 2];
     inPoint[3] = 1.0f;
 
-    matrix4MultVector4(mvpMatrix, inPoint, &(outPoints[i * 4]));
+    matrix4fMultVec4f(mvpMatrix, inPoint, &(outPoints[i * 4]));
 
     xImg = outPoints[i * 4 + 0] / outPoints[i * 4 + 3];
     yImg = outPoints[i * 4 + 1] / outPoints[i * 4 + 3];
@@ -1224,6 +1134,10 @@ int VRL::render() {
   delete[]pointsTrianglesForBox;
   delete[]depthBuffer;
 
+  if (this->enableDrawBox) {
+    renderDrawBox();
+  }
+
 #if 0
 //TEST START
   uint32_t cubePointNumber[8] = {18, 21, 3, 0, 30, 33, 15, 12};
@@ -1281,4 +1195,119 @@ int VRL::render() {
   delete[](this->privateRenderimage);
 
   return VRL_OK;
+}
+
+void VRL::renderDrawBox() {
+  uint32_t cubePointNumber[8] = { 18, 21, 3, 0, 30, 33, 15, 12 };
+  float points2D[8 * 2];
+  float tmpVec[4];
+
+  // MVP matrix
+  float *mvpMatrix = renderGetMVPMatrix();
+
+  // Create box for volume
+  float *pointsTrianglesForBox = renderCreateBoxForVolume();
+
+  float x;
+  float y;
+  for (uint32_t i = 0; i < 8; i++) {
+    tmpVec[0] = pointsTrianglesForBox[cubePointNumber[i] + 0];
+    tmpVec[1] = pointsTrianglesForBox[cubePointNumber[i] + 1];
+    tmpVec[2] = pointsTrianglesForBox[cubePointNumber[i] + 2];
+    tmpVec[3] = 1.0f;
+
+    matrix4fMultVec4f(mvpMatrix, tmpVec, tmpVec);
+
+    // set point
+    x = tmpVec[0] / tmpVec[3];
+    y = tmpVec[1] / tmpVec[3];
+
+    x = (x + 1.0f) * (float)(this->imageWidth * this->imageScale) / 2.0f;
+    y = (float)(this->imageHeight * this->imageScale) - (y + 1.0f) * (float)(this->imageHeight * this->imageScale) / 2.0f;
+
+    x = roundf(x);
+    y = roundf(y);
+
+    points2D[i*2] = x;
+    points2D[i*2 + 1] = y;
+  }
+
+  unsigned char color[4] = {255, 255, 255, 255};
+
+  brezenhem(points2D[0], points2D[1], points2D[2], points2D[3], color);
+  brezenhem(points2D[2], points2D[3], points2D[4], points2D[5], color);
+  brezenhem(points2D[4], points2D[5], points2D[6], points2D[7], color);
+  brezenhem(points2D[6], points2D[7], points2D[0], points2D[1], color);
+
+  brezenhem(points2D[8], points2D[9], points2D[10], points2D[11], color);
+  brezenhem(points2D[10], points2D[11], points2D[12], points2D[13], color);
+  brezenhem(points2D[12], points2D[13], points2D[14], points2D[15], color);
+  brezenhem(points2D[14], points2D[15], points2D[8], points2D[9], color);
+
+  brezenhem(points2D[0], points2D[1], points2D[8], points2D[9], color);
+  brezenhem(points2D[2], points2D[3], points2D[10], points2D[11], color);
+  brezenhem(points2D[4], points2D[5], points2D[12], points2D[13], color);
+  brezenhem(points2D[6], points2D[7], points2D[14], points2D[15], color);
+}
+
+void VRL::brezenhem(int x0, int y0, int x1, int y1, unsigned char *rgba) { 
+  int A, B, sign;
+  A = y1 - y0;
+  B = x0 - x1;
+  
+  if (abs(A) > abs(B))
+    sign = 1;
+  else 
+    sign = -1;
+    
+  int signa, signb;
+
+  if (A < 0)
+    signa = -1;
+  else
+    signa = 1;
+    
+  if (B < 0)
+    signb = -1;  
+  else 
+    signb = 1;
+
+  int f = 0;
+  this->privateRenderimage[(y0 * this->imageWidth + x0) * 4 + 0] = rgba[0];
+  this->privateRenderimage[(y0 * this->imageWidth + x0) * 4 + 1] = rgba[1];
+  this->privateRenderimage[(y0 * this->imageWidth + x0) * 4 + 2] = rgba[2];
+  this->privateRenderimage[(y0 * this->imageWidth + x0) * 4 + 3] = rgba[3];
+
+  int x = x0, y = y0;
+  if (sign == -1) {
+    do {
+      f += A*signa;
+      if (f > 0) {
+        f -= B*signb;
+        y += signa;
+      }
+      x -= signb;
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 0] = rgba[0];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 1] = rgba[1];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 2] = rgba[2];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 3] = rgba[3];
+    } while (x != x1 || y != y1);
+  } else {
+    do {
+      f += B*signb;
+      if (f > 0) {
+        f -= A*signa;
+        x -= signb;
+      }
+      y += signa;
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 0] = rgba[0];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 1] = rgba[1];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 2] = rgba[2];
+      this->privateRenderimage[(y * this->imageWidth + x) * 4 + 3] = rgba[3];
+    } while (x != x1 || y != y1);
+  }
+}
+
+void VRL::setEnableDrawBox(int32_t en) {
+  this->enableDrawBox = en;
 }

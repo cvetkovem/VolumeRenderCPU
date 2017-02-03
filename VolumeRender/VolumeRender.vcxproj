@@ -152,6 +152,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="utils\VectorMath.h" />
     <ClInclude Include="VolumeRenderLibrary.h" />
   </ItemGroup>
   <ItemGroup>

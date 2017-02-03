@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdint.h>
+#include <ctime>
 
 #include "VolumeRenderLibrary.h"
 
@@ -53,7 +53,7 @@ int main() {
   vrl->addRotateVolume(angle, axis);
 
   // Set light
-  float direction[4] = {-1.0f, -1.0f, 1.0f, 0.0f};
+  float direction[4] = {0.0f, -1.0f, 0.0f, 0.0f};
   vrlColor lightColor;
   lightColor.r = 0.98f;
   lightColor.g = 0.98f;
@@ -67,17 +67,11 @@ int main() {
   vrl->setLight(direction, &lightColor);
 
   // Set camera
-  float cameraPosition[3] = { 0.0f,  1.0f, -2.0f };
-  float cameraTarget[3]   = { 0.0f, -0.5f,  1.0f };
-  float cameraUp[3]       = { 0.0f,  1.0f,  0.0f };
+  float cameraPosition[3] = { 0.0f,  0.75f, -1.5f };
+  float cameraTarget[3]   = { 0.0f, -0.5f,   1.0f };
+  float cameraUp[3]       = { 0.0f,  1.0f,   0.0f };
   float zNear = 0.1f;
   vrl->setCameraConfigure(cameraPosition, cameraTarget, cameraUp, zNear);
-
-  // Set clipping box
-  uint32_t xClipMin = 1; uint32_t xClipMax = 1;
-  uint32_t yClipMin = 1; uint32_t yClipMax = 1;
-  uint32_t zClipMin = 1; uint32_t zClipMax = 1;
-  vrl->setClippingBox(xClipMin, xClipMax, yClipMin, yClipMax, zClipMin, zClipMax);
 
   // Set quality / perfomance
   vrl->enableAntialiasing(VRL_ANTIALIASING_X1);
@@ -88,8 +82,14 @@ int main() {
   uint32_t imgHeight = 512;
   vrl->allocImage(imgWidth, imgHeight);
 
-  vrl->render();
+  // Set volume box draw
+  vrl->setEnableDrawBox(0);
 
+  // Render
+  unsigned int startTime = clock();
+  vrl->render();
+  printf("Time: %5.2f sec\n", (float)((clock() - startTime) / 1000.0f));
+  
   unsigned char *image = vrl->getImage();
 
   saveImageToFile(image, imgWidth, imgHeight);
@@ -114,6 +114,11 @@ int loadVolume(VolumeLoad *data) {
 
       fclose(fp);
 
+      // test goto HU
+      for (int i = 0; i < data->volumeWidth * data->volumeHeight * data->volumeNumber; i++) {
+        data->volume[i] = data->volume[i] - 1024.0f;
+      }
+
       return 0;
   }
   return -1;
@@ -121,7 +126,7 @@ int loadVolume(VolumeLoad *data) {
 
 void setLUTPoints(VRL *vrl) {
 /*
-  name="[WL]Tissue"
+  name="Tissue"
   <color density = "25.684" opacity = "0"     r = "0"   g = "0"   b = "0"   ambient = "0.25" diffuse = "0.8" specular = "0.8" / >
   <color density = "58.001" opacity = "0.195" r = "255" g = "0"   b = "0"   ambient = "0.25" diffuse = "0.8" specular = "0.8" / >
   <color density = "85.83"  opacity = "0.51"  r = "255" g = "255" b = "0"   ambient = "0.25" diffuse = "0.8" specular = "0.8" / >
@@ -141,19 +146,20 @@ void setLUTPoints(VRL *vrl) {
   color.emission  = 0.0f;
   color.shininess = 0.0f; //15
 
-  vrl->addLUTPoint(-972.64f, &color); // density = "25.684" %
+  //w = 400 c = 50; min = -150 max = 250;
+  vrl->addLUTPoint(-47.264f, &color); // density = "25.684" %
 
   color.r = 1.0f;
   color.a = 0.195f;
-  vrl->addLUTPoint(320.04f, &color);  // density = "58.001" %
+  vrl->addLUTPoint(82.004f, &color);  // density = "58.001" %
 
   color.g = 1.0f;
   color.a = 0.51f;
-  vrl->addLUTPoint(1433.2f, &color);  // density = "85.83"  %
+  vrl->addLUTPoint(193.32f, &color);  // density = "85.83"  %
 
   color.b = 1.0f;
   color.a = 1.0f;
-  vrl->addLUTPoint(1999.0f, &color);  // density = "100.0"  %
+  vrl->addLUTPoint(250.0f, &color);  // density = "100.0"  %
 
   vrl->interpolateLUT();
 }
