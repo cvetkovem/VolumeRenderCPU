@@ -370,21 +370,13 @@ unsigned char* VRL::getImage() {
 void VRL::calcCameraMatrixs(uint32_t width, uint32_t height) {
   cameraTranslate(this->cameraPosition[0], this->cameraPosition[1], this->cameraPosition[2]);
   cameraRotate(this->cameraTarget, this->cameraUp);
-  cameraPerspective(60.0f, width, height, zNear, 1000.0f);
+  cameraPerspective(60.0f, width, height, zNear, 10.0f);
 }
 
 int VRL::setCameraConfigure(float *position, float *target, float *up, float zNear) {
-  this->cameraPosition[0] = position[0];
-  this->cameraPosition[1] = position[1];
-  this->cameraPosition[2] = position[2];
-
-  this->cameraTarget[0] = target[0];
-  this->cameraTarget[1] = target[1];
-  this->cameraTarget[2] = target[2];
-
-  this->cameraUp[0] = up[0];
-  this->cameraUp[1] = up[1];
-  this->cameraUp[2] = up[2];
+  copyVec3f(this->cameraPosition, position);
+  copyVec3f(this->cameraTarget, target);
+  copyVec3f(this->cameraUp, up);
 
   this->zNear = zNear;
 
@@ -392,25 +384,10 @@ int VRL::setCameraConfigure(float *position, float *target, float *up, float zNe
 }
 
 void VRL::cameraTranslate(float x, float y, float z) {
-  this->cameraTranslateMatrix[0]  = 1.0f;
-  this->cameraTranslateMatrix[1]  = 0.0f;
-  this->cameraTranslateMatrix[2]  = 0.0f;
-  this->cameraTranslateMatrix[3]  = -x;
-
-  this->cameraTranslateMatrix[4]  = 0.0f;
-  this->cameraTranslateMatrix[5]  = 1.0f;
-  this->cameraTranslateMatrix[6]  = 0.0f;
-  this->cameraTranslateMatrix[7]  = -y;
-
-  this->cameraTranslateMatrix[8]  = 0.0f;
-  this->cameraTranslateMatrix[9]  = 0.0f;
-  this->cameraTranslateMatrix[10] = 1.0f;
-  this->cameraTranslateMatrix[11] = -z;
-
-  this->cameraTranslateMatrix[12] = 0.0f;
-  this->cameraTranslateMatrix[13] = 0.0f;
-  this->cameraTranslateMatrix[14] = 0.0f;
-  this->cameraTranslateMatrix[15] = 1.0f;
+  setVec4f(&(this->cameraTranslateMatrix[0]),  1.0f, 0.0f, 0.0f, -x);
+  setVec4f(&(this->cameraTranslateMatrix[4]),  0.0f, 1.0f, 0.0f, -y);
+  setVec4f(&(this->cameraTranslateMatrix[8]),  0.0f, 0.0f, 1.0f, -z);
+  setVec4f(&(this->cameraTranslateMatrix[12]), 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void VRL::cameraRotate(float *_cameraTarget, float *_cameraUp) {
@@ -425,25 +402,10 @@ void VRL::cameraRotate(float *_cameraTarget, float *_cameraUp) {
   float V[3];
   crossVec3f(N, U, V);
 
-  this->cameraRotateMatrix[0]  = U[0];
-  this->cameraRotateMatrix[1]  = U[1];
-  this->cameraRotateMatrix[2]  = U[2];
-  this->cameraRotateMatrix[3]  = 0.0f;
-
-  this->cameraRotateMatrix[4]  = V[0];
-  this->cameraRotateMatrix[5]  = V[1];
-  this->cameraRotateMatrix[6]  = V[2];
-  this->cameraRotateMatrix[7]  = 0.0f;
-
-  this->cameraRotateMatrix[8]  = N[0];
-  this->cameraRotateMatrix[9]  = N[1];
-  this->cameraRotateMatrix[10] = N[2];
-  this->cameraRotateMatrix[11] = 0.0f;
-
-  this->cameraRotateMatrix[12] = 0.0f;
-  this->cameraRotateMatrix[13] = 0.0f;
-  this->cameraRotateMatrix[14] = 0.0f;
-  this->cameraRotateMatrix[15] = 1.0f;
+  setVec4f(&(this->cameraRotateMatrix[0]),  U[0], U[1], U[2], 0.0f);
+  setVec4f(&(this->cameraRotateMatrix[4]),  V[0], V[1], V[2], 0.0f);
+  setVec4f(&(this->cameraRotateMatrix[8]),  N[0], N[1], N[2], 0.0f);
+  setVec4f(&(this->cameraRotateMatrix[12]), 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void VRL::cameraPerspective(float angle, uint32_t width, uint32_t height, float _zNear, float zFar) {
@@ -451,25 +413,10 @@ void VRL::cameraPerspective(float angle, uint32_t width, uint32_t height, float 
   const float zRange = _zNear - zFar;
   const double tanHalfFOV = tan((double)ToRadian(angle / 2.0f));
 
-  this->cameraPerspectiveMatrix[0]  = (float)(1.0L / (tanHalfFOV * ar));
-  this->cameraPerspectiveMatrix[1]  = 0.0f;
-  this->cameraPerspectiveMatrix[2]  = 0.0f;
-  this->cameraPerspectiveMatrix[3]  = 0.0f;
-
-  this->cameraPerspectiveMatrix[4]  = 0.0f;
-  this->cameraPerspectiveMatrix[5]  = (float)(1.0L / tanHalfFOV);
-  this->cameraPerspectiveMatrix[6]  = 0.0f;
-  this->cameraPerspectiveMatrix[7]  = 0.0f;
-
-  this->cameraPerspectiveMatrix[8]  = 0.0f;
-  this->cameraPerspectiveMatrix[9]  = 0.0f;
-  this->cameraPerspectiveMatrix[10] = (-_zNear - zFar) / zRange;
-  this->cameraPerspectiveMatrix[11] = 2.0f * zFar * _zNear / zRange;
-
-  this->cameraPerspectiveMatrix[12] = 0.0f;
-  this->cameraPerspectiveMatrix[13] = 0.0f;
-  this->cameraPerspectiveMatrix[14] = 1.0f;
-  this->cameraPerspectiveMatrix[15] = 0.0f;
+  setVec4f(&(this->cameraPerspectiveMatrix[0]),  (float)(1.0L / (tanHalfFOV * ar)), 0.0f, 0.0f, 0.0f);
+  setVec4f(&(this->cameraPerspectiveMatrix[4]),  0.0f, (float)(1.0L / tanHalfFOV), 0.0f, 0.0f);
+  setVec4f(&(this->cameraPerspectiveMatrix[8]),  0.0f, 0.0f, (-_zNear - zFar) / zRange, 2.0f * zFar * _zNear / zRange);
+  setVec4f(&(this->cameraPerspectiveMatrix[12]), 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
 int VRL::setRotateVolume(float angle, float *axis) {
@@ -517,49 +464,19 @@ int VRL::addRotateVolume(float angle, float *axis) {
 }
 
 int VRL::resetRotationVolume() {
-  this->volumeRotateMatrix[0] = 1.0f;
-  this->volumeRotateMatrix[1] = 0.0f;
-  this->volumeRotateMatrix[2] = 0.0f;
-  this->volumeRotateMatrix[3] = 0.0f;
-
-  this->volumeRotateMatrix[4] = 0.0f;
-  this->volumeRotateMatrix[5] = 1.0f;
-  this->volumeRotateMatrix[6] = 0.0f;
-  this->volumeRotateMatrix[7] = 0.0f;
-
-  this->volumeRotateMatrix[8] = 0.0f;
-  this->volumeRotateMatrix[9] = 0.0f;
-  this->volumeRotateMatrix[10] = 1.0f;
-  this->volumeRotateMatrix[11] = 0.0f;
-
-  this->volumeRotateMatrix[12] = 0.0f;
-  this->volumeRotateMatrix[13] = 0.0f;
-  this->volumeRotateMatrix[14] = 0.0f;
-  this->volumeRotateMatrix[15] = 1.0f;
+  setVec4f(&(this->volumeRotateMatrix[0]),  1.0f, 0.0f, 0.0f, 0.0f);
+  setVec4f(&(this->volumeRotateMatrix[4]),  0.0f, 1.0f, 0.0f, 0.0f);
+  setVec4f(&(this->volumeRotateMatrix[8]),  0.0f, 0.0f, 1.0f, 0.0f);
+  setVec4f(&(this->volumeRotateMatrix[12]), 0.0f, 0.0f, 0.0f, 1.0f);
 
   return VRL_OK;
 }
 
 int VRL::setTranslateVolume(float x, float y, float z) {
-  this->volumeTranslateMatrix[0]  = 1.0f;
-  this->volumeTranslateMatrix[1]  = 0.0f;
-  this->volumeTranslateMatrix[2]  = 0.0f;
-  this->volumeTranslateMatrix[3]  = x;
-
-  this->volumeTranslateMatrix[4]  = 0.0f;
-  this->volumeTranslateMatrix[5]  = 1.0f;
-  this->volumeTranslateMatrix[6]  = 0.0f;
-  this->volumeTranslateMatrix[7]  = y;
-
-  this->volumeTranslateMatrix[8]  = 0.0f;
-  this->volumeTranslateMatrix[9]  = 0.0f;
-  this->volumeTranslateMatrix[10] = 1.0f;
-  this->volumeTranslateMatrix[11] = z;
-
-  this->volumeTranslateMatrix[12] = 0.0f;
-  this->volumeTranslateMatrix[13] = 0.0f;
-  this->volumeTranslateMatrix[14] = 0.0f;
-  this->volumeTranslateMatrix[15] = 1.0f;
+  setVec4f(&(this->volumeTranslateMatrix[0]),  1.0f, 0.0f, 0.0f, x);
+  setVec4f(&(this->volumeTranslateMatrix[4]),  0.0f, 1.0f, 0.0f, y);
+  setVec4f(&(this->volumeTranslateMatrix[8]),  0.0f, 0.0f, 1.0f, z);
+  setVec4f(&(this->volumeTranslateMatrix[12]), 0.0f, 0.0f, 0.0f, 1.0f);
 
   return VRL_OK;
 }
@@ -845,10 +762,6 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
   return (float)this->minDensity;
 }
 
-void dot(float *x, float *y, float *out) {
-  *out = x[0]*y[0] + x[1]*y[1] + x[2]*y[2];
-}
-
 int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor) {
   float rayStepSize = this->renderStepSize / this->volumeBoxMaxLen;
   float rayDirection[3];
@@ -953,7 +866,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         normalizeVec3f(currentNormal);
         matrix4fMultVec4f(modelMatrix, currentNormal, currentNormal);
         //if(dot(normalVec,ray)>0) normalVec*=-1;
-        dot(currentNormal, lightDirectionMinus, &diffuseFactor);
+        dotVec3f(currentNormal, lightDirectionMinus, &diffuseFactor);
         diffuseFactor = (diffuseFactor < 0.0f)?(0.0f):(diffuseFactor);
         rgb[0] += this->interpR[index] * this->interpDiffuse[index] * diffuseFactor;
         rgb[1] += this->interpG[index] * this->interpDiffuse[index] * diffuseFactor;

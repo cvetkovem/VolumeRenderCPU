@@ -10,6 +10,12 @@
 #define ToRadian(x) ((x) * M_PI / 180.0f)
 #define ToDegree(x) ((x) * 180.0f / M_PI)
 
+inline void copyVec3f(float *out, float *in) {
+  out[0] = in[0];
+  out[1] = in[1];
+  out[2] = in[2];
+}
+
 inline void setVec3f(float *out, float x, float y, float z) {
   out[0] = x;
   out[1] = y;
