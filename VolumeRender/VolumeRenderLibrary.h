@@ -57,7 +57,7 @@ typedef struct _LUTPoint {
 
 class VRL {
 private:
-  int16_t *volume;
+  float *volume;
   uint32_t *xOffset;
   uint32_t *yOffset;
   uint32_t *zOffset;
@@ -65,8 +65,8 @@ private:
   uint32_t xlen;
   uint32_t ylen;
   uint32_t zlen;
-  int32_t minDensity;
-  int32_t maxDensity;
+  float minDensity;
+  float maxDensity;
   float volumeBoxMaxLen;
 
   LUTPoint *headLUTPoint;
@@ -108,6 +108,22 @@ private:
 
   int32_t enableDrawBox;
 
+  // M: model matrix
+  float modelMatrix[16];
+  // V: view matrix 
+  float viewMatrix[16];
+  // P: perspective matrix
+  // float cameraPerspectiveMatrix[16];
+  // VP: view perspective matrix 
+  float viewPerspectiveMatrix[16];
+  // MVP: model view perspective matrix
+  float mvpMatrix[16];
+  // MV: model view matrix (for fragment shader)
+  float modelViewMatrix[16];
+  
+  // newCameraPosition (for fragment shader)
+  float newCameraPosition[3];
+
   void cameraPerspective(float angle, uint32_t width, uint32_t height, float zNear, float zFar);
   void cameraTranslate(float x, float y, float z);
   void cameraRotate(float *cameraTarget, float *cameraUp);
@@ -117,11 +133,11 @@ private:
   void deleteInterpolate();
 
   // functions for render
-  float* renderGetMVPMatrix();
+  void renderCalculateMVPMatrix();
   float* renderCreateBoxForVolume();
   void renderDrawBox();
   void brezenhem(int x0, int y0, int x1, int y1, unsigned char *rgba);
-  void renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBuffer);
+  void renderPipeLine(float *pointsTriangle, float *depthBuffer);
   int32_t renderFragmentShader(float *rayPosition, unsigned char *pixelColor);
 
   float getDensityFromVolume(float x, float y, float z);

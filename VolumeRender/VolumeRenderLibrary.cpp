@@ -91,8 +91,8 @@ int VRL::setVolume(int16_t *_volume, uint32_t _xlen, uint32_t _ylen, uint32_t _z
   this->xlen = _xlen;
   this->ylen = _ylen;
   this->zlen = _zlen;
-  this->minDensity = _minDensity;
-  this->maxDensity = _maxDensity;
+  this->minDensity = (float)_minDensity;
+  this->maxDensity = (float)_maxDensity;
 
   // delete old data
   deleteVolume();
@@ -107,7 +107,7 @@ int VRL::setVolume(int16_t *_volume, uint32_t _xlen, uint32_t _ylen, uint32_t _z
     zlenNew = ((_zlen / BLOCK_SIZE_Z) + 1) * BLOCK_SIZE_Z;
   }
 
-  this->volume = new int16_t[xlenNew * ylenNew * zlenNew];
+  this->volume = new float[xlenNew * ylenNew * zlenNew];
   this->xOffset = new uint32_t[xlenNew];
   this->yOffset = new uint32_t[ylenNew];
   this->zOffset = new uint32_t[zlenNew];
@@ -155,7 +155,7 @@ int VRL::setVolume(int16_t *_volume, uint32_t _xlen, uint32_t _ylen, uint32_t _z
         tmp = (tmp < _minDensity) ? (_minDensity) : (tmp);
         tmp = (tmp > _maxDensity) ? (_maxDensity) : (tmp);
 
-        this->volume[xOffset[i] + yOffset[j] + zOffset[k]] = tmp;
+        this->volume[xOffset[i] + yOffset[j] + zOffset[k]] = (float)tmp;
       }
     }
   }
@@ -240,7 +240,7 @@ int VRL::removeLUTPoint(float density) {
 int VRL::interpolateLUT() {
   deleteInterpolate();
 
-  int32_t sizeInterp = this->maxDensity - this->minDensity;
+  int32_t sizeInterp = (int32_t)(this->maxDensity - this->minDensity);
 
   this->interpR         = new float[sizeInterp * 9];
   this->interpG         = &(this->interpR[sizeInterp * 1]);
@@ -546,26 +546,36 @@ int VRL::enableAntialiasing(ANTIALIASING_VALUE value) {
  * RENDER funtions *
  *******************/
 
-float* VRL::renderGetMVPMatrix() {
+void VRL::renderCalculateMVPMatrix() {
   calcCameraMatrixs(this->imageWidth * this->imageScale, this->imageHeight * this->imageScale);
 
   // M: model matrix
-  float modelMatrix[16];
-  multMatrix4fx4f(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
+  multMatrix4fx4f(this->volumeTranslateMatrix, this->volumeRotateMatrix, this->modelMatrix);
 
   // V: view matrix 
-  float viewMatrix[16];
-  multMatrix4fx4f(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
+  multMatrix4fx4f(this->cameraRotateMatrix, this->cameraTranslateMatrix, this->viewMatrix);
 
   // P: projection matrix
   // this->cameraPerspectiveMatrix;
 
+  // VP matrix
+  multMatrix4fx4f(this->cameraPerspectiveMatrix, this->viewMatrix, this->viewPerspectiveMatrix);
   // MVP matrix
-  float *mvpMatrix = new float[16];
-  multMatrix4fx4f(this->cameraPerspectiveMatrix, viewMatrix, mvpMatrix);
-  multMatrix4fx4f(mvpMatrix, modelMatrix, mvpMatrix);
+  multMatrix4fx4f(this->viewPerspectiveMatrix, this->modelMatrix, this->mvpMatrix);
 
-  return mvpMatrix;
+  // MV matrix
+  multMatrix4fx4f(this->viewMatrix, this->modelMatrix, this->modelViewMatrix);
+
+  float *MV = this->modelViewMatrix;
+  float vecPoint[4];
+  vecPoint[0] = 0.0f - MV[3];
+  vecPoint[1] = 0.0f - MV[7];
+  vecPoint[2] = 0.0f - MV[11];
+  vecPoint[3] = 1.0f - MV[15];
+
+  this->newCameraPosition[0] = vecPoint[0] * MV[0] + vecPoint[1] * MV[4] + vecPoint[2] * MV[8] + vecPoint[3] * MV[12];
+  this->newCameraPosition[1] = vecPoint[0] * MV[1] + vecPoint[1] * MV[5] + vecPoint[2] * MV[9] + vecPoint[3] * MV[13];
+  this->newCameraPosition[2] = vecPoint[0] * MV[2] + vecPoint[1] * MV[6] + vecPoint[2] * MV[10] + vecPoint[3] * MV[14];
 }
 
 float* VRL::renderCreateBoxForVolume(){
@@ -648,11 +658,11 @@ float* VRL::renderCreateBoxForVolume(){
   return pointsTrianglesForBox;
 }
 
-float sign(float *p1, float *p2, float *p3) {
+inline float sign(const float *p1, const float *p2, const float *p3) {
     return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]);
 }
 
-int32_t pointInTriangle(float *pt, float *v1, float *v2, float *v3) {
+inline int32_t pointInTriangle(const float *pt, const float *v1, const float *v2, const float *v3) {
     int32_t b1, b2, b3;
 
     b1 = sign(pt, v1, v2) < 0.0f;
@@ -662,7 +672,7 @@ int32_t pointInTriangle(float *pt, float *v1, float *v2, float *v3) {
     return ((b1 == b2) && (b2 == b3));
 }
 
-void getBarycentricCoordinate(float *barycentricCoordinate, float *pt, float *v1, float *v2, float *v3) {
+inline void getBarycentricCoordinate(float *barycentricCoordinate, const float *pt, const float *v1, const float *v2, const float *v3) {
   barycentricCoordinate[0] = ((v2[1] - v3[1]) * (pt[0] - v3[0]) + (v3[0] - v2[0]) * (pt[1] - v3[1])) / ((v2[1] - v3[1]) * (v1[0] - v3[0]) + (v3[0] - v2[0]) * (v1[1] - v3[1]));
   barycentricCoordinate[1] = ((v3[1] - v1[1]) * (pt[0] - v3[0]) + (v1[0] - v3[0]) * (pt[1] - v3[1])) / ((v2[1] - v3[1]) * (v1[0] - v3[0]) + (v3[0] - v2[0]) * (v1[1] - v3[1]));
   barycentricCoordinate[2] = 1.0f - barycentricCoordinate[0] - barycentricCoordinate[1];
@@ -672,7 +682,7 @@ void getBarycentricCoordinate(float *barycentricCoordinate, float *pt, float *v1
   barycentricCoordinate[5] = v3[3];
 }
 
-float barycentricInterp(float *barycentricCoordinate, float value1, float value2, float value3) {
+inline float barycentricInterp(float *barycentricCoordinate, const float value1, const float value2, const float value3) {
   float w1, w2, w3;
   w1 = barycentricCoordinate[3];
   w2 = barycentricCoordinate[4];
@@ -681,7 +691,7 @@ float barycentricInterp(float *barycentricCoordinate, float value1, float value2
          (barycentricCoordinate[0] / w1 + barycentricCoordinate[1] / w2 + barycentricCoordinate[2] / w3);
 }
 
-float cubicInterpolate(float *array4, float x) {
+inline float cubicInterpolate(const float *array4, const float x) {
   float x2 = x * x;
   float x3 = x2 * x;
 
@@ -690,7 +700,7 @@ float cubicInterpolate(float *array4, float x) {
     + (-0.5f * array4[0] + 1.5f * array4[1] - 1.5f * array4[2] + 0.5f * array4[3]) * x3;
 }
 
-float threeCubicInterpolation(float *array64, float *pointPosition) {
+inline float threeCubicInterpolation(const float *array64, const float *pointPosition) {
   float array4[4];
   float array4Final[4];
 
@@ -733,7 +743,7 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
   float array64[64];
   float localPointPosition[3];
   float density;
-  
+
   if ((xInt - 1) >= 0 && ((uint32_t)xInt - 1) + 3 < this->xlen &&
       (yInt - 1) >= 0 && ((uint32_t)yInt - 1) + 3 < this->ylen &&
       (zInt - 1) >= 0 && ((uint32_t)zInt - 1) + 3 < this->zlen) {
@@ -759,7 +769,7 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
     return density;
   }
 
-  return (float)this->minDensity;
+  return this->minDensity;
 }
 
 int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor) {
@@ -770,33 +780,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   int32_t needDrawPixel;
   float density;
 
-  // M: model matrix
-  float modelMatrix[16];
-  multMatrix4fx4f(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
-  // V: view matrix 
-  float viewMatrix[16];
-  multMatrix4fx4f(this->cameraRotateMatrix, this->cameraTranslateMatrix, viewMatrix);
-
-  float MV[16];
-  multMatrix4fx4f(viewMatrix, modelMatrix, MV);
-
-  float vecPoint[4];
-  float newCamera[3];
-  vecPoint[0] = 0.0f - MV[3];
-  vecPoint[1] = 0.0f - MV[7];
-  vecPoint[2] = 0.0f - MV[11];
-  vecPoint[3] = 1.0f - MV[15];
-
-  newCamera[0] = vecPoint[0] * MV[0] + vecPoint[1] * MV[4] + vecPoint[2] * MV[8] + vecPoint[3] * MV[12];
-  newCamera[1] = vecPoint[0] * MV[1] + vecPoint[1] * MV[5] + vecPoint[2] * MV[9] + vecPoint[3] * MV[13];
-  newCamera[2] = vecPoint[0] * MV[2] + vecPoint[1] * MV[6] + vecPoint[2] * MV[10] + vecPoint[3] * MV[14];
-
-  //c4 point_transformed_with_inverse = vec4(vec3((point - matrix[3]) * matrix), 1.0);
-
   // calculate ray direction for current point
-  rayDirection[0] = rayPosition[0] - newCamera[0];
-  rayDirection[1] = rayPosition[1] - newCamera[1];
-  rayDirection[2] = rayPosition[2] - newCamera[2];
+  rayDirection[0] = rayPosition[0] -  this->newCameraPosition[0];
+  rayDirection[1] = rayPosition[1] -  this->newCameraPosition[1];
+  rayDirection[2] = rayPosition[2] -  this->newCameraPosition[2];
 
   normalizeVec3f(rayDirection);
 
@@ -914,7 +901,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   return 0;
 }
 
-void VRL::renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBuffer) {
+void VRL::renderPipeLine(float *pointsTriangle, float *depthBuffer) {
   // Screen coordinates
   float xImg;
   float yImg;
@@ -929,7 +916,7 @@ void VRL::renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBu
     inPoint[2] = pointsTriangle[i * 3 + 2];
     inPoint[3] = 1.0f;
 
-    matrix4fMultVec4f(mvpMatrix, inPoint, &(outPoints[i * 4]));
+    matrix4fMultVec4f(this->mvpMatrix, inPoint, &(outPoints[i * 4]));
 
     xImg = outPoints[i * 4 + 0] / outPoints[i * 4 + 3];
     yImg = outPoints[i * 4 + 1] / outPoints[i * 4 + 3];
@@ -964,10 +951,6 @@ void VRL::renderPipeLine(float *mvpMatrix, float *pointsTriangle, float *depthBu
   int32_t fragmentShaderReturnBool;
   float interpDepth;
   float testPoint[2];
-
-  // M: model matrix
-  //float modelMatrix[16];
-  //multMatrix4x4(this->volumeTranslateMatrix, this->volumeRotateMatrix, modelMatrix);
 
   // Barycentric coordinate
   float barycentricCoordinate[6]; // l1, l2, l3, w1, w2, w3
@@ -1025,7 +1008,7 @@ int VRL::render() {
   }
 
   // MVP matrix
-  float *mvpMatrix = renderGetMVPMatrix();
+  renderCalculateMVPMatrix();
 
   // Create box for volume
   float *pointsTrianglesForBox = renderCreateBoxForVolume();
@@ -1040,10 +1023,9 @@ int VRL::render() {
   // for all 12 triangles
   for (uint32_t i = 0; i < 108; i+=9) {
     //printf("%u Triangle\n", i / 9);
-    renderPipeLine(mvpMatrix, &(pointsTrianglesForBox[i]), depthBuffer);
+    renderPipeLine(&(pointsTrianglesForBox[i]), depthBuffer);
   }
 
-  delete[]mvpMatrix;
   delete[]pointsTrianglesForBox;
   delete[]depthBuffer;
 
@@ -1064,7 +1046,7 @@ int VRL::render() {
     vector[2] = pointsTrianglesForBox[cubePointNumber[i] + 2];
     vector[3] = 1.0f;
 
-    matrix4MultVector4(mvpMatrix, vector, &(outPoints[i * 4]));
+    matrix4MultVector4(this->mvpMatrix, vector, &(outPoints[i * 4]));
 
     // set point
     x = outPoints[i * 4 + 0] / outPoints[i * 4 + 3];
@@ -1115,9 +1097,6 @@ void VRL::renderDrawBox() {
   float points2D[8 * 2];
   float tmpVec[4];
 
-  // MVP matrix
-  float *mvpMatrix = renderGetMVPMatrix();
-
   // Create box for volume
   float *pointsTrianglesForBox = renderCreateBoxForVolume();
 
@@ -1129,7 +1108,7 @@ void VRL::renderDrawBox() {
     tmpVec[2] = pointsTrianglesForBox[cubePointNumber[i] + 2];
     tmpVec[3] = 1.0f;
 
-    matrix4fMultVec4f(mvpMatrix, tmpVec, tmpVec);
+    matrix4fMultVec4f(this->mvpMatrix, tmpVec, tmpVec);
 
     // set point
     x = tmpVec[0] / tmpVec[3];
