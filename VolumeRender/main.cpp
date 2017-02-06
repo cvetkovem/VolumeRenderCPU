@@ -75,8 +75,8 @@ int main() {
   vrl->setCameraConfigure(cameraPosition, cameraTarget, cameraUp, zNear);
 
   // Set quality / perfomance
-  vrl->enableAntialiasing(VRL_ANTIALIASING_X1);
-  vrl->setImageQuality(VRL_IMG_QUA_BEST_EXPERIMENTAL);
+  vrl->enableAntialiasing(VRL_ANTIALIASING_X16);
+  vrl->setImageQuality(VRL_IMG_QUA_REALISTIC);
 
   // Set output image
   uint32_t imgWidth = 512;

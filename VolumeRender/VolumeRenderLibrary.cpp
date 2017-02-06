@@ -310,18 +310,24 @@ int VRL::interpolateLUT() {
     start = (uint32_t)( current->density - this->minDensity );
     stop  = (uint32_t)( ((LUTPoint *)current->next)->density - this->minDensity );
     for (uint32_t i = start; i < stop; i++) {
-      this->interpR[i] = current->sColor.r + (i - start) * (previous->sColor.r - current->sColor.r) / (stop - start);
-      this->interpG[i] = current->sColor.g + (i - start) * (previous->sColor.g - current->sColor.g) / (stop - start);
-      this->interpB[i] = current->sColor.b + (i - start) * (previous->sColor.b - current->sColor.b) / (stop - start);
-      this->interpA[i] = current->sColor.a + (i - start) * (previous->sColor.a - current->sColor.a) / (stop - start);
-      this->interpAmbient[i]   = current->sColor.ambient   + (i - start) * (previous->sColor.ambient   - current->sColor.ambient)   / (stop - start);
-      this->interpDiffuse[i]   = current->sColor.diffuse   + (i - start) * (previous->sColor.diffuse   - current->sColor.diffuse)   / (stop - start);
-      this->interpSpecular[i]  = current->sColor.specular  + (i - start) * (previous->sColor.specular  - current->sColor.specular)  / (stop - start);
-      this->interpEmission[i]  = current->sColor.emission  + (i - start) * (previous->sColor.emission  - current->sColor.emission)  / (stop - start);
-      this->interpShininess[i] = current->sColor.shininess + (i - start) * (previous->sColor.shininess - current->sColor.shininess) / (stop - start);
+      this->interpR[i] = current->sColor.r + (i - start) * (((LUTPoint *)current->next)->sColor.r - current->sColor.r) / (stop - start);
+      this->interpG[i] = current->sColor.g + (i - start) * (((LUTPoint *)current->next)->sColor.g - current->sColor.g) / (stop - start);
+      this->interpB[i] = current->sColor.b + (i - start) * (((LUTPoint *)current->next)->sColor.b - current->sColor.b) / (stop - start);
+      this->interpA[i] = current->sColor.a + (i - start) * (((LUTPoint *)current->next)->sColor.a - current->sColor.a) / (stop - start);
+      this->interpAmbient[i]   = current->sColor.ambient   + (i - start) * (((LUTPoint *)current->next)->sColor.ambient   - current->sColor.ambient)   / (stop - start);
+      this->interpDiffuse[i]   = current->sColor.diffuse   + (i - start) * (((LUTPoint *)current->next)->sColor.diffuse   - current->sColor.diffuse)   / (stop - start);
+      this->interpSpecular[i]  = current->sColor.specular  + (i - start) * (((LUTPoint *)current->next)->sColor.specular  - current->sColor.specular)  / (stop - start);
+      this->interpEmission[i]  = current->sColor.emission  + (i - start) * (((LUTPoint *)current->next)->sColor.emission  - current->sColor.emission)  / (stop - start);
+      this->interpShininess[i] = current->sColor.shininess + (i - start) * (((LUTPoint *)current->next)->sColor.shininess - current->sColor.shininess) / (stop - start);
     }
     current = (LUTPoint *)current->next;
   }
+
+#if 0
+  for (int i = 0; i < sizeInterp; i++) {
+    printf("%d %d %d\n", (int)(this->interpR[i] * 255.0f), (int)(this->interpG[i] * 255.0f), (int)(this->interpB[i] * 255.0f));
+  }
+#endif
 
   return VRL_OK;
 }
@@ -740,8 +746,8 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
   int32_t yInt = (int32_t)(y);
   int32_t zInt = (int32_t)(z);
 
-#if 0
-  if (this->volume[this->xOffset[xInt] + this->yOffset[yInt] + this->zOffset[zInt]] < 190.0f) {
+#if 1
+  if (this->volume[this->xOffset[xInt] + this->yOffset[yInt] + this->zOffset[zInt]] < -151.0f) {
     return this->minDensity;
   }
 #endif
@@ -812,10 +818,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   float densityNeighbors[6]; // +-x; +-y; +-z
   float specularFactor;
   float reflectVec3[3];
+  float alphaAcc = 0.0f;
   float alpha = 0.0f;
-  float oldAlpha = 0.0f;
-  float oldRgb[3];
-  setVec3f(oldRgb, 0.0f, 0.0f, 0.0f);
+  float rgbAcc[3];
+  setVec3f(rgbAcc, 0.0f, 0.0f, 0.0f);
 
   while (inVolume) {
     // inside step
@@ -834,10 +840,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
 
       index = (int32_t)(density - this->minDensity);
 
-      if (this->interpA[index] > 0.0f /*&& density > 200.0f*/) {
+      if (this->interpA[index] > 0.00f /*&& density > 200.0f*/) {
         needDrawPixel = 1;
 
-        if (alpha > 0.95f) {
+        if (alphaAcc > 0.95f) {
           break;
         }
 
@@ -893,10 +899,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         //copyVec3f(oldRgb, rgb);
         //alpha = (1.0f - alpha) * (this->interpA[index]) + alpha;
         
-        oldAlpha = 1.0f - powf(1.0f - this->interpA[index], this->rayStepSize * 10.0f);
-        multToConstVec3f(rgb, oldAlpha * (1.0f - alpha));
-        addVec3f(oldRgb, rgb, oldRgb);
-        alpha += (1.0f - alpha) * oldAlpha;
+        alpha = 1.0f - powf(1.0f - this->interpA[index], this->renderStepSize);
+        multToConstVec3f(rgb, alpha * (1.0f - alphaAcc));
+        addVec3f(rgb, rgbAcc, rgbAcc);
+        alphaAcc = (1.0f - alphaAcc) * alpha + alphaAcc;
 
         //colorSample.a = 1.0 - pow(1.0 - colorSample.a, StepSize*200.0f);
         //colorAcum.rgb += (1.0 - colorAcum.a) * colorSample.rgb * colorSample.a;
@@ -910,13 +916,13 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   }
 
   if (needDrawPixel) {
-    oldRgb[0] = (oldRgb[0] < 1.0f) ? (oldRgb[0]) : (1.0f);
-    oldRgb[1] = (oldRgb[1] < 1.0f) ? (oldRgb[1]) : (1.0f);
-    oldRgb[2] = (oldRgb[2] < 1.0f) ? (oldRgb[2]) : (1.0f);
+    rgbAcc[0] = (rgbAcc[0] < 1.0f) ? (rgbAcc[0]) : (1.0f);
+    rgbAcc[1] = (rgbAcc[1] < 1.0f) ? (rgbAcc[1]) : (1.0f);
+    rgbAcc[2] = (rgbAcc[2] < 1.0f) ? (rgbAcc[2]) : (1.0f);
 
-    pixelColor[0] = (unsigned char)(oldRgb[0] * 255.0f);
-    pixelColor[1] = (unsigned char)(oldRgb[1] * 255.0f);
-    pixelColor[2] = (unsigned char)(oldRgb[2] * 255.0f);
+    pixelColor[0] = (unsigned char)(rgbAcc[0] * 255.0f);
+    pixelColor[1] = (unsigned char)(rgbAcc[1] * 255.0f);
+    pixelColor[2] = (unsigned char)(rgbAcc[2] * 255.0f);
     pixelColor[3] = alpha;
 
     return 1;
