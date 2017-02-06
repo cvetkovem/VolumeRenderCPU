@@ -124,6 +124,12 @@ private:
   // newCameraPosition (for fragment shader)
   float newCameraPosition[3];
 
+  // const for all ray
+  float rayStepSize;
+  float boxXdiv2;
+  float boxYdiv2;
+  float boxZdiv2;
+
   void cameraPerspective(float angle, uint32_t width, uint32_t height, float zNear, float zFar);
   void cameraTranslate(float x, float y, float z);
   void cameraRotate(float *cameraTarget, float *cameraUp);

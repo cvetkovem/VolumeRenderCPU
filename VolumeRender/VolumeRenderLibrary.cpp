@@ -588,9 +588,9 @@ float* VRL::renderCreateBoxForVolume(){
   float boxY = (float)(this->ylen) / maxLen;
   float boxZ = (float)(this->zlen) / maxLen;
   
-  float boxXdiv2 = boxX / 2.0f;
-  float boxYdiv2 = boxY / 2.0f;
-  float boxZdiv2 = boxZ / 2.0f;
+  this->boxXdiv2 = boxX / 2.0f;
+  this->boxYdiv2 = boxY / 2.0f;
+  this->boxZdiv2 = boxZ / 2.0f;
   
   // copy for use in fragment shader
   this->volumeBoxMaxLen = maxLen;
@@ -740,6 +740,12 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
   int32_t yInt = (int32_t)(y);
   int32_t zInt = (int32_t)(z);
 
+#if 0
+  if (this->volume[this->xOffset[xInt] + this->yOffset[yInt] + this->zOffset[zInt]] < 190.0f) {
+    return this->minDensity;
+  }
+#endif
+
   float array64[64];
   float localPointPosition[3];
   float density;
@@ -773,34 +779,25 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
 }
 
 int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor) {
-  float rayStepSize = this->renderStepSize / this->volumeBoxMaxLen;
   float rayDirection[3];
+  float rayDirectionMinus[3];
   float newRayPosition[3];
   int32_t inVolume;
   int32_t needDrawPixel;
   float density;
 
   // calculate ray direction for current point
-  rayDirection[0] = rayPosition[0] -  this->newCameraPosition[0];
-  rayDirection[1] = rayPosition[1] -  this->newCameraPosition[1];
-  rayDirection[2] = rayPosition[2] -  this->newCameraPosition[2];
-
+  // rayDirection = rayPosition - this->newCameraPosition
+  subVec3f(rayPosition, this->newCameraPosition, rayDirection);
   normalizeVec3f(rayDirection);
 
-  rayDirection[0] = rayStepSize * rayDirection[0];
-  rayDirection[1] = rayStepSize * rayDirection[1];
-  rayDirection[2] = rayStepSize * rayDirection[2];
+  copyVec3f(rayDirectionMinus, rayDirection);
+  multToConstVec3f(rayDirectionMinus, -1.0f);
 
-  float boxX = (float)(this->xlen) /  this->volumeBoxMaxLen;
-  float boxY = (float)(this->ylen) /  this->volumeBoxMaxLen;
-  float boxZ = (float)(this->zlen) /  this->volumeBoxMaxLen;
-  float boxXdiv2 = boxX / 2.0f;
-  float boxYdiv2 = boxY / 2.0f;
-  float boxZdiv2 = boxZ / 2.0f;
-
-  newRayPosition[0] = rayPosition[0] + rayDirection[0];
-  newRayPosition[1] = rayPosition[1] + rayDirection[1];
-  newRayPosition[2] = rayPosition[2] + rayDirection[2];
+  // rayDirection = rayDirection * this->rayStepSize
+  multToConstVec3f(rayDirection, this->rayStepSize);
+  // newRayPosition = rayPosition + rayDirection
+  addVec3f(rayPosition, rayDirection, newRayPosition);
 
   inVolume = 1;
   needDrawPixel = 0;
@@ -814,6 +811,11 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   float currentNormal[3];
   float densityNeighbors[6]; // +-x; +-y; +-z
   float specularFactor;
+  float reflectVec3[3];
+  float alpha = 0.0f;
+  float oldAlpha = 0.0f;
+  float oldRgb[3];
+  setVec3f(oldRgb, 0.0f, 0.0f, 0.0f);
 
   while (inVolume) {
     // inside step
@@ -830,23 +832,28 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
                                      (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen,  // y
                                      (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen); // z
 
+      index = (int32_t)(density - this->minDensity);
 
-// TEST START
-      if (density > 200.0f) {
+      if (this->interpA[index] > 0.0f /*&& density > 200.0f*/) {
+        needDrawPixel = 1;
+
+        if (alpha > 0.95f) {
+          break;
+        }
+
         // Phong 
-        index = (int32_t)(density - this->minDensity);
         // Ambient
         rgb[0] = this->interpR[index] * this->interpAmbient[index];
         rgb[1] = this->interpG[index] * this->interpAmbient[index];
         rgb[2] = this->interpB[index] * this->interpAmbient[index];
         // Diffuse
         // +x -x +y -y +z -z
-        densityNeighbors[0] = getDensityFromVolume((newRayPosition[0] + boxXdiv2 + rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
-        densityNeighbors[1] = getDensityFromVolume((newRayPosition[0] + boxXdiv2 - rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
-        densityNeighbors[2] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2 + rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
-        densityNeighbors[3] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2 - rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
-        densityNeighbors[4] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2 + rayStepSize) * this->volumeBoxMaxLen);
-        densityNeighbors[5] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2 - rayStepSize) * this->volumeBoxMaxLen);
+        densityNeighbors[0] = getDensityFromVolume((newRayPosition[0] + boxXdiv2 + this->rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
+        densityNeighbors[1] = getDensityFromVolume((newRayPosition[0] + boxXdiv2 - this->rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
+        densityNeighbors[2] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2 + this->rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
+        densityNeighbors[3] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2 - this->rayStepSize) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2) * this->volumeBoxMaxLen);
+        densityNeighbors[4] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2 + this->rayStepSize) * this->volumeBoxMaxLen);
+        densityNeighbors[5] = getDensityFromVolume((newRayPosition[0] + boxXdiv2) * this->volumeBoxMaxLen, (newRayPosition[1] + boxYdiv2) * this->volumeBoxMaxLen, (newRayPosition[2] + boxZdiv2 - this->rayStepSize) * this->volumeBoxMaxLen);
         currentNormal[0] = -(densityNeighbors[0] - densityNeighbors[1]);
         currentNormal[1] = -(densityNeighbors[2] - densityNeighbors[3]);
         currentNormal[2] = -(densityNeighbors[4] - densityNeighbors[5]);
@@ -859,41 +866,58 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         rgb[1] += this->interpG[index] * this->interpDiffuse[index] * diffuseFactor;
         rgb[2] += this->interpB[index] * this->interpDiffuse[index] * diffuseFactor;
         // Specular
-        //specularFactor = ;
-        //rgb[0] += this->interpR[index] * this->interpSpecular[index] * specularFactor;
-        //rgb[1] += this->interpG[index] * this->interpSpecular[index] * specularFactor;
-        //rgb[2] += this->interpB[index] * this->interpSpecular[index] * specularFactor;
+        // reflect I - 2.0 * dot(N, I) * N.
+        dotVec3f(currentNormal, this->lightDirection, &specularFactor);
+        copyVec3f(reflectVec3, currentNormal);
+        multToConstVec3f(reflectVec3, 2.0f * specularFactor);
+        subVec3f(this->lightDirection, reflectVec3, reflectVec3);
+        multToConstVec3f(reflectVec3, -1.0f);
+        normalizeVec3f(reflectVec3);
+
+        dotVec3f(reflectVec3, rayDirectionMinus, &specularFactor);
+        specularFactor = (specularFactor < 0.0f) ? (0.0f) : (specularFactor);
+        specularFactor = powf(specularFactor, this->interpShininess[index]);
+        rgb[0] += this->interpR[index] * this->interpSpecular[index] * specularFactor;
+        rgb[1] += this->interpG[index] * this->interpSpecular[index] * specularFactor;
+        rgb[2] += this->interpB[index] * this->interpSpecular[index] * specularFactor;
 
         rgb[0] = (rgb[0] < 1.0f)?(rgb[0]):(1.0f);
         rgb[1] = (rgb[1] < 1.0f)?(rgb[1]):(1.0f);
         rgb[2] = (rgb[2] < 1.0f)?(rgb[2]):(1.0f);
-        pixelColor[0] = (unsigned char)(rgb[0] * 255.0f);
-        pixelColor[1] = (unsigned char)(rgb[1] * 255.0f);
-        pixelColor[2] = (unsigned char)(rgb[2] * 255.0f);
-        pixelColor[3] = (unsigned char)(this->interpA[(int)(density - this->minDensity)] * 255.0f);
-        //this->interpAmbient[(int)(density - this->minDensity)];
-        //this->interpDiffuse[(int)(density - this->minDensity)];
-        //this->interpSpecular[(int)(density - this->minDensity)];
-        //this->interpEmission[(int)(density - this->minDensity)];
-        //this->interpShininess[(int)(density - this->minDensity)];
-        needDrawPixel = 1;
-        break;
+
+        // mixing colors
+        // A = (1 - oldA)*A + oldA;
+        // C = (1 - oldA)*C + oldC;
+        //multToConstVec3f(rgb, 1.0f - alpha);
+        //addVec3f(rgb, oldRgb, rgb);
+        //copyVec3f(oldRgb, rgb);
+        //alpha = (1.0f - alpha) * (this->interpA[index]) + alpha;
+        
+        oldAlpha = 1.0f - powf(1.0f - this->interpA[index], this->rayStepSize * 10.0f);
+        multToConstVec3f(rgb, oldAlpha * (1.0f - alpha));
+        addVec3f(oldRgb, rgb, oldRgb);
+        alpha += (1.0f - alpha) * oldAlpha;
+
+        //colorSample.a = 1.0 - pow(1.0 - colorSample.a, StepSize*200.0f);
+        //colorAcum.rgb += (1.0 - colorAcum.a) * colorSample.rgb * colorSample.a;
+        //colorAcum.a += (1.0 - colorAcum.a) * colorSample.a;
+
+        
       }
-// TEST END
-
-    // TODO:
-
     } else {
       break;
     }
   }
 
   if (needDrawPixel) {
-    //printf("%1.6f %1.6f %1.6f\n", rayPosition[0], rayPosition[1], rayPosition[2]);
-    //pixelColor[0] = 255;
-    //pixelColor[1] = 255;
-    //pixelColor[2] = 255;
-    //pixelColor[3] = 255;
+    oldRgb[0] = (oldRgb[0] < 1.0f) ? (oldRgb[0]) : (1.0f);
+    oldRgb[1] = (oldRgb[1] < 1.0f) ? (oldRgb[1]) : (1.0f);
+    oldRgb[2] = (oldRgb[2] < 1.0f) ? (oldRgb[2]) : (1.0f);
+
+    pixelColor[0] = (unsigned char)(oldRgb[0] * 255.0f);
+    pixelColor[1] = (unsigned char)(oldRgb[1] * 255.0f);
+    pixelColor[2] = (unsigned char)(oldRgb[2] * 255.0f);
+    pixelColor[3] = alpha;
 
     return 1;
   }
@@ -984,6 +1008,8 @@ void VRL::renderPipeLine(float *pointsTriangle, float *depthBuffer) {
               this->privateRenderimage[((uint32_t)j * (this->imageWidth * this->imageScale) + (uint32_t)i) * 4 + 2] = pixelColor[2];
               this->privateRenderimage[((uint32_t)j * (this->imageWidth * this->imageScale) + (uint32_t)i) * 4 + 3] = pixelColor[3];
             }
+
+            // TODO: actions after Fragment Shader
           }
         }
       }
@@ -1019,6 +1045,9 @@ int VRL::render() {
   for (uint32_t i = 0; i < privateImageSize / 4; i++) {
     depthBuffer[i] = 1000.0f;
   }
+
+  // calculate ray step size
+  this->rayStepSize = this->renderStepSize / this->volumeBoxMaxLen;
 
   // for all 12 triangles
   for (uint32_t i = 0; i < 108; i+=9) {

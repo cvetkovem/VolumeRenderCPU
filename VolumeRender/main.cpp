@@ -147,7 +147,7 @@ void setLUTPoints(VRL *vrl) {
   color.diffuse   = 0.8f;
   color.specular  = 0.8f;
   color.emission  = 0.0f;
-  color.shininess = 0.0f; //15
+  color.shininess = 15.0f; // 15
 
   //w = 400 c = 50; min = -150 max = 250;
   vrl->addLUTPoint(-47.264f, &color); // density = "25.684" %
