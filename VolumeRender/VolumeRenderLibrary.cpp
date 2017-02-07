@@ -511,7 +511,7 @@ int VRL::setImageQuality(VRL_IMAGE_QUALITY imgQua) {
     break;
 
   case VRL_IMG_QUA_REALISTIC:
-    this->renderStepSize = 0.01f;
+    this->renderStepSize = 0.1f;
   break;
 
   default:
@@ -746,7 +746,7 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
   int32_t yInt = (int32_t)(y);
   int32_t zInt = (int32_t)(z);
 
-#if 1
+#if 0
   if (this->volume[this->xOffset[xInt] + this->yOffset[yInt] + this->zOffset[zInt]] < -151.0f) {
     return this->minDensity;
   }
@@ -814,7 +814,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   lightDirectionMinus[0] = -this->lightDirection[0];
   lightDirectionMinus[1] = -this->lightDirection[1];
   lightDirectionMinus[2] = -this->lightDirection[2];
-  float currentNormal[3];
+  float currentNormal[4];
   float densityNeighbors[6]; // +-x; +-y; +-z
   float specularFactor;
   float reflectVec3[3];
@@ -840,13 +840,8 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
 
       index = (int32_t)(density - this->minDensity);
 
-      if (this->interpA[index] > 0.00f /*&& density > 200.0f*/) {
+      if (this->interpA[index] > 0.99f /*&& density > 200.0f*/) {
         needDrawPixel = 1;
-
-        if (alphaAcc > 0.95f) {
-          break;
-        }
-
         // Phong 
         // Ambient
         rgb[0] = this->interpR[index] * this->interpAmbient[index];
@@ -864,6 +859,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         currentNormal[1] = -(densityNeighbors[2] - densityNeighbors[3]);
         currentNormal[2] = -(densityNeighbors[4] - densityNeighbors[5]);
         normalizeVec3f(currentNormal);
+        currentNormal[3] = 0.0f;
         matrix4fMultVec4f(modelMatrix, currentNormal, currentNormal);
         //if(dot(normalVec,ray)>0) normalVec*=-1;
         dotVec3f(currentNormal, lightDirectionMinus, &diffuseFactor);
@@ -892,23 +888,14 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         rgb[2] = (rgb[2] < 1.0f)?(rgb[2]):(1.0f);
 
         // mixing colors
-        // A = (1 - oldA)*A + oldA;
-        // C = (1 - oldA)*C + oldC;
-        //multToConstVec3f(rgb, 1.0f - alpha);
-        //addVec3f(rgb, oldRgb, rgb);
-        //copyVec3f(oldRgb, rgb);
-        //alpha = (1.0f - alpha) * (this->interpA[index]) + alpha;
-        
         alpha = 1.0f - powf(1.0f - this->interpA[index], this->renderStepSize);
         multToConstVec3f(rgb, alpha * (1.0f - alphaAcc));
         addVec3f(rgb, rgbAcc, rgbAcc);
         alphaAcc = (1.0f - alphaAcc) * alpha + alphaAcc;
 
-        //colorSample.a = 1.0 - pow(1.0 - colorSample.a, StepSize*200.0f);
-        //colorAcum.rgb += (1.0 - colorAcum.a) * colorSample.rgb * colorSample.a;
-        //colorAcum.a += (1.0 - colorAcum.a) * colorSample.a;
-
-        
+        if (alphaAcc > 0.98f) {
+          break;
+        }       
       }
     } else {
       break;
@@ -923,7 +910,7 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
     pixelColor[0] = (unsigned char)(rgbAcc[0] * 255.0f);
     pixelColor[1] = (unsigned char)(rgbAcc[1] * 255.0f);
     pixelColor[2] = (unsigned char)(rgbAcc[2] * 255.0f);
-    pixelColor[3] = alpha;
+    pixelColor[3] = (unsigned char)(alpha * 255.0f);
 
     return 1;
   }

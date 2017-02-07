@@ -75,7 +75,7 @@ int main() {
   vrl->setCameraConfigure(cameraPosition, cameraTarget, cameraUp, zNear);
 
   // Set quality / perfomance
-  vrl->enableAntialiasing(VRL_ANTIALIASING_X16);
+  vrl->enableAntialiasing(VRL_ANTIALIASING_X4);
   vrl->setImageQuality(VRL_IMG_QUA_REALISTIC);
 
   // Set output image
@@ -136,6 +136,7 @@ void setLUTPoints(VRL *vrl) {
   <color density = "100"    opacity = "1"     r = "255" g = "255" b = "255" ambient = "0.25" diffuse = "0.8" specular = "0.8" / >
   <shiny value="15"/>
 */
+
   vrl->clearLUT();
 
   vrlColor color;
@@ -150,19 +151,19 @@ void setLUTPoints(VRL *vrl) {
   color.shininess = 15.0f; // 15
 
   //w = 400 c = 50; min = -150 max = 250;
-  vrl->addLUTPoint(-47.264f, &color); // density = "25.684" %
+  vrl->addLUTPoint(/*-758.0f*/ -47.264f - 800.0f, &color); // density = "25.684" %
 
-  color.r = 1.0f;
+  color.r = 0.78f;
   color.a = 0.195f;
-  vrl->addLUTPoint(82.004f, &color);  // density = "58.001" %
+  vrl->addLUTPoint(/*-630.0f*/ 82.004f - 800.0f, &color);  // density = "58.001" %
 
-  color.g = 1.0f;
+  color.g = .68f;
   color.a = 0.51f;
-  vrl->addLUTPoint(193.32f, &color);  // density = "85.83"  %
+  vrl->addLUTPoint(/*-470.0f*/ 193.32f - 800.0f, &color);  // density = "85.83"  %
 
-  color.b = 1.0f;
+  color.b = 0.6f;
   color.a = 1.0f;
-  vrl->addLUTPoint(250.0f, &color);  // density = "100.0"  %
+  vrl->addLUTPoint(/*-462.0f*/ 250.0f - 800.0f, &color);  // density = "100.0"  %
 
   vrl->interpolateLUT();
 }
