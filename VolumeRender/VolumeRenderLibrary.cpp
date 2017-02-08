@@ -786,7 +786,7 @@ float VRL::getDensityFromVolume(float x, float y, float z) {
 
 int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor) {
   float rayDirection[3];
-  float rayDirectionMinus[3];
+  float eyeDirectionMinus[3];
   float newRayPosition[3];
   int32_t inVolume;
   int32_t needDrawPixel;
@@ -797,8 +797,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
   subVec3f(rayPosition, this->newCameraPosition, rayDirection);
   normalizeVec3f(rayDirection);
 
-  copyVec3f(rayDirectionMinus, rayDirection);
-  multToConstVec3f(rayDirectionMinus, -1.0f);
+  eyeDirectionMinus[0] = this->cameraPosition[0];
+  eyeDirectionMinus[1] = this->cameraPosition[1];
+  eyeDirectionMinus[2] = this->cameraPosition[2];
+  normalizeVec3f(eyeDirectionMinus);
 
   // rayDirection = rayDirection * this->rayStepSize
   multToConstVec3f(rayDirection, this->rayStepSize);
@@ -873,10 +875,10 @@ int32_t VRL::renderFragmentShader(float *rayPosition, unsigned char *pixelColor)
         copyVec3f(reflectVec3, currentNormal);
         multToConstVec3f(reflectVec3, 2.0f * specularFactor);
         subVec3f(this->lightDirection, reflectVec3, reflectVec3);
-        multToConstVec3f(reflectVec3, -1.0f);
+        //multToConstVec3f(reflectVec3, -1.0f);
         normalizeVec3f(reflectVec3);
 
-        dotVec3f(reflectVec3, rayDirectionMinus, &specularFactor);
+        dotVec3f(reflectVec3, eyeDirectionMinus, &specularFactor);
         specularFactor = (specularFactor < 0.0f) ? (0.0f) : (specularFactor);
         specularFactor = powf(specularFactor, this->interpShininess[index]);
         rgb[0] += this->interpR[index] * this->interpSpecular[index] * specularFactor;

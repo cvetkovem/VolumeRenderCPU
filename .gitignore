@@ -11,3 +11,5 @@
 /VolumeRender/SAVE_IMG.TXT
 /.vs/VolumeRender/v14
 /VolumeRender/img.bmp
+/VolumeRender/dicomMatrixOLD.bin
+/VolumeRender/*.bin

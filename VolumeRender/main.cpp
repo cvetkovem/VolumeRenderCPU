@@ -41,11 +41,11 @@ int main() {
   vrl->resetRotationVolume();
   vrl->resetTranslateVolume();
   vrl->setTranslateVolume(0.0f, 0.0f, 0.0f);
-  float angle = 180.0f;
+  float angle = -90.0f;
   float axis[3] = {0.0f, 0.0f, 1.0f};
   vrl->setRotateVolume(angle, axis);
 
-  angle = 155.0f;
+  angle = 155.0f + 180.0f;
   axis[0] = 0.0f; axis[1] = 1.0f; axis[2] = 0.0f;
   vrl->addRotateVolume(angle, axis);
 
